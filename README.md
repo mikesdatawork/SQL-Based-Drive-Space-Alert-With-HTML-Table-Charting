@@ -82,7 +82,7 @@ declare     @iid                int
 declare     @maxid              int
 declare     @domain             nvarchar(255)
 declare     @ports      table ([PortType] nvarchar(180), Port int)
-exec        master..xp_regread 'HKEY_LOCAL_MACHINE', 'SYSTEM\CurrentControlSet\services\Tcpip\Parameters', N'Domain',@Domain output
+exec        master..xp_regread 'HKEY_LOCAL_MACHINE', 'SYSTEM\CurrentControlSet\services\Tcpip\Parameters', N'DomaiN',@Domain output
  
 ----------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------
@@ -96,12 +96,12 @@ declare     @instances  table
 ,   [DynamicPort]   int
 );
  
-declare     @xp_msver_platform  table ([id] int,[name] varchar(180),[InternalValue] varchar(50), [Charactervalue] varchar (50))
+declare     @xp_msver_platform  table ([id] int,[name] varchar(180),[internalvalue] varchar(50), [charactervalue] varchar (50))
 declare     @platform       varchar(10)
 insert into @xp_msver_platform exec master..xp_msver platform
-select  @platform = (select 1 from @xp_msver_platform where [Charactervalue] like '%86%')
-If  @platform is NULL
-Begin
+select  @platform = (select 1 from @xp_msver_platform where [charactervalue] like '%86%')
+if  @platform is null
+begin
     insert into @instances ([InstanceName], [InstanceFolder])
     exec master..xp_regenumvalues N'HKEY_LOCAL_MACHINE', N'SOFTWARE\Microsoft\Microsoft SQL Server\Instance Names\SQL';
 end
@@ -111,95 +111,40 @@ Begin
     exec master..xp_regenumvalues N'HKEY_LOCAL_MACHINE', N'SOFTWARE\Microsoft\Microsoft SQL Server\Instance Names\SQL';
 end
   
-declare     @Key table ([KeyValue] int)
-insert into @Key
-exec master..xp_regread'HKEY_LOCAL_MACHINE', N'SOFTWARE\Wow6432Node\Microsoft\Microsoft SQL Server\Instance Names\SQL';
-select  @original= [KeyValue] from @Key
-If      @original=1
-        insert into @instances ([InstanceName], [InstanceFolder])
-        exec master..xp_regenumvalues N'HKEY_LOCAL_MACHINE', N'SOFTWARE\Wow6432Node\Microsoft\Microsoft SQL Server\Instance Names\SQL';
+declare     @key table ([keyvalue] int)
+insert into @key
+exec master..xp_regread'hkey_local_machine', N'software\wow6432node\microsoft\microsoft sql server\instance names\sql';
+select  @original= [keyvalue] from @key
+if      @original=1
+        insert into @instances ([instancename], [instancefolder])
+        exec master..xp_regenumvalues N'hkey_local_machine', N'software\wow6432node\microsoft\microsoft sql server\instance names\sql';
   
-select  @maxid = max([InstanceID]), @iid = 1
+select  @maxid = max([instanceid]), @iid = 1
 from    @instances
 while   @iid <= @maxid
     begin
         delete from @ports
-        select      @statements = 'exec xp_instance_regread N''HKEY_LOCAL_MACHINE'', N''SOFTWARE\Microsoft\\Microsoft SQL Server\' 
-        + [instancefolder] + '\MSSQLServer\SuperSocketNetLib\Tcp\IPAll'', N''TCPDynamicPorts'''
+        select      @statements = 'exec xp_instance_regread N''hkey_local_machine'', N''software\microsoft\\microsoft sql server\' 
+        + [instancefolder] + '\mssqlserver\supersocketnetlib\tcp\ipall'', N''tcpdynamicports'''
         from        @instances  where [instanceid] = @iid
         insert into @ports  exec sp_executesql @statements
-        select      @statements = 'exec xp_instance_regread N''HKEY_LOCAL_MACHINE'', N''SOFTWARE\Microsoft\\Microsoft SQL Server\' 
-        + [instancefolder] + '\MSSQLServer\SuperSocketNetLib\Tcp\IPAll'', N''TCPPort'''
+        select      @statements = 'exec xp_instance_regread N''hkey_local_machine'', N''software\microsoft\\microsoft sql server\' 
+        + [instancefolder] + '\mssqlserver\supersocketnetlib\tcp\ipall'', N''tcpport'''
         from        @instances  where [instanceid] = @iid
         insert into @ports  exec sp_executesql @statements
-        select      @statements = 'exec xp_instance_regread N''HKEY_LOCAL_MACHINE'', N''SOFTWARE\Wow6432Node\Microsoft\\Microsoft SQL Server\' 
-        + [instancefolder] + '\MSSQLServer\SuperSocketNetLib\Tcp\IPAll'', N''TCPDynamicPorts'''
+        select      @statements = 'exec xp_instance_regread N''hkey_local_machine'', N''software\wow6432node\microsoft\\microsoft sql server\' 
+        + [instancefolder] + '\mssqlserver\supersocketnetlib\tcp\ipall'', N''tcpdynamicports'''
         from        @instances  where [instanceid] = @iid
         insert into @ports  exec sp_executesql @statements
-        select      @statements = 'exec xp_instance_regread N''HKEY_LOCAL_MACHINE'', N''SOFTWARE\Wow6432Node\Microsoft\\Microsoft SQL Server\' 
-        + [InstanceFolder] + '\MSSQLServer\SuperSocketNetLib\Tcp\IPAll'', N''TCPPort'''
+        select      @statements = 'exec xp_instance_regread N''hkey_local_machine'', N''software\wow6432node\microsoft\\microsoft sql server\' 
+        + [instancefolder] + '\mssqlserver\supersocketnetlib\tcp\ipall'', N''tcpport'''
         from        @instances  where [instanceid] = @iid
         insert into @ports  exec sp_executesql @statements
         update si   set [staticport] = p.port, [dynamicport] = dp.port from @instances si
-        inner join @ports dp on dp.[porttype] = 'TCPDynamicPorts' join @ports p on p.[porttype] = 'TCPPort'
+        inner join @ports dp on dp.[porttype] = 'tcpdynamicports' join @ports p on p.[porttype] = 'tcpport'
         where [instanceid] = @iid;
         set @iid = @iid + 1
     end
-
-----------------------------------------------------------------------------------------                  
-----------------------------------------------------------------------------------------
--- create and capture databases that are missing a current backup
-declare @missing_current_backup table
-(
-	[server]			varchar(255)
-,   [database]			varchar(255)
-,   [time_of_backup]    varchar(255)
-,   [last_backup]		varchar(255)
-)
- 
-insert into @missing_current_backup ([server], [database],[time_of_backup],[last_backup])
-select
-	'server'			= upper(@@servername)
-,   'database'			= upper(bs.database_name)
-,   'time_of_backup'    = replace(cast(replace(replace(replace(left(max(bs.backup_finish_date), 19),':', '-'), 'AM', 'am'), 'PM', 'pm') + ' ' + datename(dw, max(bs.backup_finish_date)) as varchar), '-', ':')
-,   'last_backup'		= cast (datediff(day, max(bs.backup_finish_date), getdate()) as varchar(10)) + ' Days Old'
-from
-    msdb.dbo.backupset bs join master.sys.database_mirroring sdm on bs.database_name = db_name(sdm.database_id)
-where
-    type = 'd'
-    and bs.database_name in (select name from sys.databases)
-    and sdm.mirroring_role_desc is null
-    or sdm.mirroring_role_desc != 'mirror'
-group by
-    bs.database_name
-having
-    (max(bs.backup_finish_date) < dateadd(hour, -1, getdate())) 
-
-----------------------------------------------------------------------------------------
-----------------------------------------------------------------------------------------
--- create and capture backup paths used
-declare @backup_paths_found table
-(
-    [database]			varchar(255)
-,   [path_frequency]    varchar(255)
-,   [path]				varchar(max)
-)
-insert into @backup_paths_found ([database], [path_frequency], [path])
-select
-    upper(bs.[database_name])
-,   cast(count(*) as varchar)
-,   reverse(right(reverse(upper(bmf.physical_device_name)), len(bmf.physical_device_name) - charindex('\',reverse(bmf.physical_device_name),1) + 1))
-from
-    msdb.dbo.backupset bs join msdb.dbo.backupmediafamily bmf on bs.media_set_id = bmf.media_set_id
-where
-    bs.[database_name] in (select [database] from @missing_current_backup)
-group by
-    reverse(right(reverse(upper(bmf.physical_device_name)), len(bmf.physical_device_name) - charindex('\',reverse(bmf.physical_device_name),1) + 1))
-,   bs.[database_name]
-order by
-    bs.[database_name] asc
-
-delete from @backup_paths_found where [path_frequency] = 1
 
 ----------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------
@@ -217,19 +162,16 @@ insert into @version_info
 select
     'ServerName'      = cast(serverproperty('machinename') as varchar)
 ,   'SQLInstance'     = cast(upper(@@servername) as varchar)
-,   'SQLVersion'      =   
+,   'SQLVersioN'      =   
 case
-when left(cast(serverproperty('productversion') as varchar), 4) = '14.0' then 'SQL 2017 ' + cast(serverproperty('productlevel') as varchar)
-when left(cast(serverproperty('productversion') as varchar), 4) = '13.0' then 'SQL 2016 ' + cast(serverproperty('productlevel') as varchar)
-when left(cast(serverproperty('productversion') as varchar), 4) = '12.0' then 'SQL 2014 ' + cast(serverproperty('productlevel') as varchar)
-when left(cast(serverproperty('productversion') as varchar), 4) = '11.0' then 'SQL 2012 ' + cast(serverproperty('productlevel') as varchar)
-when left(cast(serverproperty('productversion') as varchar), 4) = '10.5' then 'SQL 2008 R2 ' + cast(serverproperty('productlevel') as varchar)
-when left(cast(serverproperty('productversion') as varchar), 4) = '10.0' then 'SQL 2008 ' + cast(serverproperty('productlevel') as varchar)
-when left(cast(serverproperty('productversion') as varchar), 4) = '9.00' then 'SQL 2005 ' + cast(serverproperty('productlevel') as varchar)
-when left(cast(serverproperty('productversion') as varchar), 4) = '8.00' then 'SQL 2000 ' + cast(serverproperty('productlevel') as varchar)
+when left(cast(serverproperty('productversioN') as varchar), 4) = '14.0' then 'SQL 2017 ' + cast(serverproperty('productlevel') as varchar)
+when left(cast(serverproperty('productversioN') as varchar), 4) = '13.0' then 'SQL 2016 ' + cast(serverproperty('productlevel') as varchar)
+when left(cast(serverproperty('productversioN') as varchar), 4) = '12.0' then 'SQL 2014 ' + cast(serverproperty('productlevel') as varchar)
+when left(cast(serverproperty('productversioN') as varchar), 4) = '11.0' then 'SQL 2012 ' + cast(serverproperty('productlevel') as varchar)
+when left(cast(serverproperty('productversioN') as varchar), 4) = '10.5' then 'SQL 2008 R2 ' + cast(serverproperty('productlevel') as varchar)
 end
-,   'SQLBuild'        = cast(serverproperty('productversion') as nvarchar(25))
-,   'SQLEdition'      = cast(serverproperty('edition') as varchar)
+,   'SQLBuild'        = cast(serverproperty('productversioN') as nvarchar(25))
+,   'SQLEditioN'      = cast(serverproperty('editioN') as varchar)
  
 ----------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------
@@ -329,6 +271,7 @@ from
 order by
 	[drive] asc
 
+select * from @drive_space
 ----------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------
 -- create email warning message
@@ -417,7 +360,7 @@ set @xml_drive_info =
 		,	[%_full]			as 'td'
 		,	''
 		,	case 
-				when [percent] > 94 then cast('<table style="border-collapse: collapse; border: none;" cellpadding="0" cellspacing="0" width="250"><td bgcolor="#C70039" style="width:' + cast([percent] as varchar) + '%; border: none; background-color:#C70039; float:left; height:12px"></td><td bgcolor="#1D1D1D" style="width:' + cast([percent_diff] as varchar) + '%; border: none; background-color:#1D1D1D; float:left; height:12px;"></td></table>' as xml)
+				when [percent] > 89 then cast('<table style="border-collapse: collapse; border: none;" cellpadding="0" cellspacing="0" width="250"><td bgcolor="#C70039" style="width:' + cast([percent] as varchar) + '%; border: none; background-color:#C70039; float:left; height:12px"></td><td bgcolor="#1D1D1D" style="width:' + cast([percent_diff] as varchar) + '%; border: none; background-color:#1D1D1D; float:left; height:12px;"></td></table>' as xml)
 				else cast('<table style="border-collapse: collapse; border: none;" cellpadding="0" cellspacing="0" width="250"><td bgcolor="#CA9321" style="width:' + cast([percent] as varchar) + '%; border: none; background-color:#CA9321; float:left; height:12px"></td><td bgcolor="#1D1D1D" style="width:' + cast([percent_diff] as varchar) + '%; border: none; background-color:#1D1D1D; float:left; height:12px;"></td></table>' as xml) 
 			end as 'td'
 		,	''
@@ -440,7 +383,7 @@ set @html_block_begin =
 BODY {background-color:#141414; line-height:1px; -webkit-text-size-adjust:none; color: #ccc; font-family: sans-serif;}
         H1 {font-size: 90%; color: #bbb;}
         H2 {font-size: 90%; color: #bbb;}
-        H3 {color: #bbb;}
+        a {color: #19A8F6; text-decoration: none;}
         TABLE, TD, TH {
             font-size: 87%;
             border: 1px solid #bbb;
@@ -555,6 +498,7 @@ if exists(select top 1 [percent] from @drive_space where [percent] > 89)
             ,   @BODY			= @message_body 
             ,   @BODY_FORMAT    = 'HTML';
     end
+
 
 ```
 
