@@ -323,7 +323,7 @@ select
 ,	'capacity'		= case when (100.0 * ([totalsize] - [freespace]) / [totalsize]) > @alert_metric_capacity then 'Warning: Low Space' else 'Ok' end
 ,	'percent'		= cast(cast(round(100.0 * ([totalsize] - [freespace]) / [totalsize], 0) as decimal(5)) as varchar)
 ,	'percent_diff'	= 100 - (cast(cast(round(100.0 * ([totalsize] - [freespace]) / [totalsize], 0) as decimal(5)) as varchar))
-,	'browse'		= '  \\' + @instance_name_basic + '\' + left([drive], 1) + '$\  '
+,	'browse'		= '  \\' + cast(serverproperty('MachineName') as nvarchar) + '.' + lower(@domain) + '\' + left([drive], 1) + '$\  '
 from 
 	#drive_info
 order by
@@ -546,7 +546,7 @@ select (@message_subject)
 ----------------------------------------------------------------------------------------
 -- send email.
 
-if exists(select top 1 [capacity] from @drive_space where [capacity] = 'Warning: Low Space')
+if exists(select top 1 [percent] from @drive_space where [percent] > 89)
     begin
         exec    msdb.dbo.sp_send_dbmail
                 @PROFILE_NAME   = 'SQLAlerts'
