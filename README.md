@@ -278,9 +278,9 @@ select * from @drive_space
 
 declare @low_drives	varchar(max)
 set		@low_drives = ''
-select	@low_drives = @low_drives + 
+select	top 1  @low_drives = @low_drives + 
 '(' + left([drive], 1) + ') is ' + [%_Full] + '   ' 
-from	@drive_space where [capacity] = 'Warning: Low Space' order by [drive] asc
+from	@drive_space where [percent] > 89 order by [percent] desc
 
 ----------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------
@@ -460,8 +460,9 @@ set @html_block_drives =
   
 + @xml_drive_info + '</table>
 <br>
-'
 
+<p>Get a list of SQL Versions at the<a href="https://sqlserverbuilds.blogspot.com/">Server Builds Blogspot</a>.</p>
+'
 
 set @html_block_end =
 '<br></body></html>'
@@ -483,7 +484,6 @@ set @message_body =
 
 declare @message_subject    varchar(1000)
 set		@message_subject = 'SQL Drive Alert on [' + @instance_name_basic + ']... ' + @low_drives
-select (@message_subject)
  
 ----------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------
@@ -494,7 +494,6 @@ if exists(select top 1 [percent] from @drive_space where [percent] > 89)
         exec    msdb.dbo.sp_send_dbmail
                 @PROFILE_NAME   = 'SQLAlerts'
             ,   @RECIPIENTS		= 'MyUserName@MyCompanyName.com'
-            ,   @SUBJECT		= @message_subject
             ,   @BODY			= @message_body 
             ,   @BODY_FORMAT    = 'HTML';
     end
