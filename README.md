@@ -16,7 +16,7 @@
 
 <p>Here is another example on how to create SQL Based Drive Space Alert With Dynamic HTML Table Charting</p>
 
-![SQL Based Drive Space Alert With HTML Table Charting]( https://mikesdatawork.files.wordpress.com/2021/06/image002.png "SQL Based Drive Space Alert With HTML Table Charting")
+![SQL Based Drive Space Alert With HTML Table Charting]( https://mikesdatawork.files.wordpress.com/2021/06/sql-html-css-outlook-email-alert-mikesdatawork.png "SQL Based Drive Space Alert With HTML Table Charting")
  
      
 ## SQL-Logic
